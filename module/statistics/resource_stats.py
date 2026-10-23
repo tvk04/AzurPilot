@@ -42,6 +42,11 @@ RESOURCE_COLUMNS = {
     'PurpleCoin': 'purple_coin',
 }
 
+# 快照写入语句只由固定列名常量拼成一次，执行时数值全部走命名参数绑定
+_SNAPSHOT_FIELDS = ('instance', 'ts', *RESOURCE_COLUMNS.values())
+_SNAPSHOT_INSERT_SQL = 'INSERT INTO resource_snapshots ({}) VALUES ({})'.format(
+    ','.join(_SNAPSHOT_FIELDS), ','.join(':' + field for field in _SNAPSHOT_FIELDS))
+
 
 def _ensure_table():
     """建表和旧数据转换统一由安装级迁移入口完成。"""
@@ -70,12 +75,10 @@ def record_resource_snapshot(instance: str, resources: Dict[str, Any], *, observ
     try:
         row = {'instance': instance, 'ts': (observed_at or datetime.now()).isoformat()}
         row.update({column: resources.get(name) for name, column in RESOURCE_COLUMNS.items()})
-        columns = ','.join(row)
-        values = ','.join(':' + name for name in row)
         if not carry_forward:
             with _local_lock, _connect() as conn:
                 register_instance(conn, instance)
-                conn.execute(f'INSERT INTO resource_snapshots ({columns}) VALUES ({values})', row)
+                conn.execute(_SNAPSHOT_INSERT_SQL, row)
             return True
         with _local_lock, _database().transaction() as conn:
             register_instance(conn, instance)
@@ -85,7 +88,7 @@ def record_resource_snapshot(instance: str, resources: Dict[str, Any], *, observ
                 for name, column in RESOURCE_COLUMNS.items():
                     if name not in resources:
                         row[column] = latest[column]
-            conn.execute(f'INSERT INTO resource_snapshots ({columns}) VALUES ({values})', row)
+            conn.execute(_SNAPSHOT_INSERT_SQL, row)
         return True
     except Exception as error:
         logger.warning(f'[统计-资源] 记录资源快照失败: {type(error).__name__}')
