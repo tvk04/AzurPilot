@@ -42,10 +42,14 @@ RESOURCE_COLUMNS = {
     'PurpleCoin': 'purple_coin',
 }
 
-# 快照写入语句只由固定列名常量拼成一次，执行时数值全部走命名参数绑定
-_SNAPSHOT_FIELDS = ('instance', 'ts', *RESOURCE_COLUMNS.values())
-_SNAPSHOT_INSERT_SQL = 'INSERT INTO resource_snapshots ({}) VALUES ({})'.format(
-    ','.join(_SNAPSHOT_FIELDS), ','.join(':' + field for field in _SNAPSHOT_FIELDS))
+# 快照写入语句写成完整字面量，数值全部走命名参数绑定；
+# 列顺序须与 RESOURCE_COLUMNS 一致，由 tests/test_resource_snapshot_sql.py 校验
+_SNAPSHOT_INSERT_SQL = (
+    'INSERT INTO resource_snapshots '
+    '(instance,ts,oil,coin,gem,pt,cube,core,medal,merit,guild_coin,action_point,yellow_coin,purple_coin) '
+    'VALUES (:instance,:ts,:oil,:coin,:gem,:pt,:cube,:core,:medal,:merit,:guild_coin,:action_point,'
+    ':yellow_coin,:purple_coin)'
+)
 
 
 def _ensure_table():
